@@ -1,0 +1,30 @@
+{
+  "name": "com.control-tools.ui-gradient",
+  "version": "0.1.0",
+  "displayName": "Control Tools - UI Gradient",
+  "description": "Configurable GPU-backed gradient rendering for Unity UI graphics.",
+  "unity": "6000.0",
+  "license": "MIT",
+  "author": {
+    "name": "Control Tools"
+  },
+  "dependencies": {
+    "com.unity.ugui": "2.0.0",
+    "com.unity.render-pipelines.universal": "17.3.0"
+  },
+  "keywords": [
+    "unity",
+    "tools",
+    "ui",
+    "gradient",
+    "urp",
+    "control-tools"
+  ],
+  "samples": [
+    {
+      "displayName": "Basic Usage",
+      "description": "Basic notes for adding UI Gradients to Unity UI graphics.",
+      "path": "Samples~/Basic Usage"
+    }
+  ]
+}
