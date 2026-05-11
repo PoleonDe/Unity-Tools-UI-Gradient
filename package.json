@@ -1,6 +1,6 @@
 {
   "name": "com.control-tools.ui-gradient",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "displayName": "Control Tools - UI Gradient",
   "description": "Configurable GPU-backed gradient rendering for Unity UI graphics.",
   "unity": "6000.0",

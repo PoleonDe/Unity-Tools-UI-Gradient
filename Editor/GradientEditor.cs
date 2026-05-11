@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -378,6 +379,10 @@ public sealed class GradientEditorWindow : EditorWindow
     private static readonly Color BorderColor = ColorFromHex(0x24, 0x24, 0x24);
     private static readonly Color IconColor = ColorFromHex(0xD9, 0xD9, 0xD9);
     private static readonly Color RowSelectionColor = new(1f, 1f, 1f, 0.08f);
+    private static readonly PropertyInfo CursorDefaultCursorIdProperty = typeof(UnityEngine.UIElements.Cursor).GetProperty(
+        "defaultCursorId",
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+    );
 
     [SerializeField] private GradientGraphic gradientTarget;
 
@@ -589,11 +594,14 @@ public sealed class GradientEditorWindow : EditorWindow
         handle.style.height = 12;
         handle.style.alignItems = Align.Center;
         handle.style.justifyContent = Justify.Center;
-        handle.Add(CreateIcon(PositionIconPath, "|"));
+        VisualElement positionIcon = CreateIcon(PositionIconPath, "|");
+        positionIcon.pickingMode = PickingMode.Ignore;
+        handle.Add(positionIcon);
         row.Add(handle);
 
         FloatField positionField = CreateNumberField(stop.time * 100f);
         positionField.style.left = 28;
+        AttachNumberFieldDragger(positionField, handle);
         positionField.RegisterValueChangedCallback(evt =>
         {
             SetSelectedStop(stop, false, false);
@@ -634,7 +642,6 @@ public sealed class GradientEditorWindow : EditorWindow
         row.Add(colorField);
 
         VisualElement alphaIcon = CreateIcon(AlphaIconPath, "A");
-        alphaIcon.pickingMode = PickingMode.Ignore;
         alphaIcon.style.position = Position.Absolute;
         alphaIcon.style.left = 265;
         alphaIcon.style.top = 6;
@@ -644,6 +651,7 @@ public sealed class GradientEditorWindow : EditorWindow
 
         FloatField alphaField = CreateNumberField(stop.color.a * 100f);
         alphaField.style.left = 281;
+        AttachNumberFieldDragger(alphaField, alphaIcon);
         alphaField.RegisterValueChangedCallback(evt =>
         {
             SetSelectedStop(stop, false, false);
@@ -673,9 +681,25 @@ public sealed class GradientEditorWindow : EditorWindow
         field.style.top = 3;
         field.style.width = 43;
         field.style.height = 18;
-        FieldMouseDragger<float> dragger = new(field);
-        dragger.SetDragZone(field);
         return field;
+    }
+
+    private static void AttachNumberFieldDragger(FloatField field, VisualElement dragZone)
+    {
+        SetDefaultCursor(dragZone, MouseCursor.ResizeHorizontal);
+
+        FieldMouseDragger<float> dragger = new(field);
+        dragger.SetDragZone(dragZone);
+    }
+
+    private static void SetDefaultCursor(VisualElement element, MouseCursor mouseCursor)
+    {
+        if (CursorDefaultCursorIdProperty == null)
+            return;
+
+        object cursor = new UnityEngine.UIElements.Cursor();
+        CursorDefaultCursorIdProperty.SetValue(cursor, (int)mouseCursor);
+        element.style.cursor = new StyleCursor((UnityEngine.UIElements.Cursor)cursor);
     }
 
     private static float ClampNumberField(FloatField field, float value)

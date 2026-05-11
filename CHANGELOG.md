@@ -2,6 +2,12 @@
 
 All notable changes to this package will be documented in this file.
 
+## [0.2.1] - 2026-05-11
+
+### Changed
+- Updated gradient editor number controls so the left icon area drags values while the number field remains directly editable.
+- Added a horizontal resize cursor over draggable number-control handles.
+
 ## [0.2.0] - 2026-05-11
 
 ### Added
