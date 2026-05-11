@@ -3,6 +3,7 @@ Shader "Control/UI/Gradient"
     Properties
     {
         [PerRendererData] _MainTex ("Texture", 2D) = "white" {}
+        _GradientTex ("Gradient Texture", 2D) = "white" {}
         _Color ("Tint", Color) = (1, 1, 1, 1)
         _ColorA ("Color A", Color) = (1, 1, 1, 1)
         _ColorB ("Color B", Color) = (0, 0, 0, 1)
@@ -81,6 +82,7 @@ Shader "Control/UI/Gradient"
             };
 
             sampler2D _MainTex;
+            sampler2D _GradientTex;
             fixed4 _TextureSampleAdd;
             fixed4 _Color;
             fixed4 _ColorA;
@@ -169,7 +171,7 @@ Shader "Control/UI/Gradient"
             fixed4 frag(v2f IN) : SV_Target
             {
                 float t = saturate(EvaluateGradient(IN.texcoord));
-                fixed4 gradientColor = lerp(_ColorA, _ColorB, t);
+                fixed4 gradientColor = tex2D(_GradientTex, float2(t, 0.5));
                 fixed4 textureColor = tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd;
                 fixed4 color = gradientColor * textureColor * IN.color;
 

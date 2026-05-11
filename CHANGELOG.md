@@ -2,6 +2,16 @@
 
 All notable changes to this package will be documented in this file.
 
+## [0.2.0] - 2026-05-11
+
+### Added
+- UI Toolkit gradient editor window with preview, draggable stops, alpha editing, and SVG icon assets.
+- Runtime gradient texture upload so multi-stop gradients render accurately in the UI shader.
+
+### Changed
+- Updated rotation and squash-handle behavior to preserve gradient geometry more consistently.
+- Updated the shader/material to sample `_GradientTex` while keeping the package shader path as `Control/UI/Gradient`.
+
 ## [0.1.0] - 2026-05-10
 
 ### Added

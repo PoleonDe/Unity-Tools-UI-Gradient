@@ -12,7 +12,9 @@ namespace Control
     {
         private const string ShaderName = "Control/UI/Gradient";
         private const string DefaultMaterialResourcePath = "Materials/UIGradient";
+        private const int GradientTextureWidth = 256;
 
+        private static readonly int GradientTextureId = Shader.PropertyToID("_GradientTex");
         private static readonly int GradientTypeId = Shader.PropertyToID("_GradientType");
         private static readonly int GradientStartId = Shader.PropertyToID("_GradientStart");
         private static readonly int GradientEndId = Shader.PropertyToID("_GradientEnd");
@@ -48,6 +50,7 @@ namespace Control
         private bool showHandles = true;
 
         [NonSerialized] private Material runtimeMaterial;
+        [NonSerialized] private Texture2D runtimeGradientTexture;
         [NonSerialized] private bool materialPropertiesDirty = true;
 
         public GradientType Type
@@ -122,10 +125,16 @@ namespace Control
         [ContextMenu("Rotate 90 Clockwise")]
         public void RotateStartAndEndClockwise()
         {
+            Vector2 oldStart = start;
+            Vector2 oldEnd = end;
+            Vector2 oldSquash = squash;
             Vector2 middle = (start + end) * 0.5f;
-            start = middle + RotateClockwise(start - middle);
-            end = middle + RotateClockwise(end - middle);
-            squash = middle + RotateClockwise(squash - middle);
+            Vector2 newStart = middle + RotateClockwise(start - middle);
+            Vector2 newEnd = middle + RotateClockwise(end - middle);
+
+            start = newStart;
+            end = newEnd;
+            squash = TransformSquashForAxisChange(oldStart, oldEnd, oldSquash, newStart, newEnd, rectTransform.rect);
             MarkMaterialPropertiesDirty();
         }
 
@@ -267,6 +276,9 @@ namespace Control
             if (runtimeMaterial == null)
                 runtimeMaterial = CreateRuntimeMaterial();
 
+            if (runtimeGradientTexture == null)
+                runtimeGradientTexture = CreateGradientTexture();
+
             if (runtimeMaterial != null && material != runtimeMaterial)
                 material = runtimeMaterial;
         }
@@ -295,7 +307,10 @@ namespace Control
         private void DestroyRuntimeMaterial()
         {
             if (runtimeMaterial == null)
+            {
+                DestroyGradientTexture();
                 return;
+            }
 
             if (material == runtimeMaterial)
                 material = null;
@@ -306,6 +321,7 @@ namespace Control
                 DestroyImmediate(runtimeMaterial);
 
             runtimeMaterial = null;
+            DestroyGradientTexture();
             materialPropertiesDirty = true;
         }
 
@@ -319,11 +335,12 @@ namespace Control
             if (runtimeMaterial == null)
                 return;
 
-            // The shader path is two-color today; this is the upload point for a future
-            // sampled multi-stop gradient texture without changing the quad geometry.
+            UpdateGradientTexture();
+
             Color colorA = gradient.Evaluate(0f);
             Color colorB = gradient.Evaluate(1f);
 
+            runtimeMaterial.SetTexture(GradientTextureId, runtimeGradientTexture);
             runtimeMaterial.SetFloat(GradientTypeId, (float)type);
             runtimeMaterial.SetVector(GradientStartId, start);
             runtimeMaterial.SetVector(GradientEndId, end);
@@ -333,6 +350,46 @@ namespace Control
             runtimeMaterial.SetColor(MaterialTintId, Color.white);
 
             materialPropertiesDirty = false;
+        }
+
+        private Texture2D CreateGradientTexture()
+        {
+            Texture2D texture = new(GradientTextureWidth, 1, TextureFormat.RGBA32, false, true)
+            {
+                name = $"{nameof(Gradient)} Texture ({GetInstanceID()})",
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear
+            };
+
+            return texture;
+        }
+
+        private void UpdateGradientTexture()
+        {
+            if (runtimeGradientTexture == null)
+                runtimeGradientTexture = CreateGradientTexture();
+
+            for (int x = 0; x < GradientTextureWidth; x++)
+            {
+                float time = GradientTextureWidth > 1 ? x / (float)(GradientTextureWidth - 1) : 0f;
+                runtimeGradientTexture.SetPixel(x, 0, gradient.Evaluate(time));
+            }
+
+            runtimeGradientTexture.Apply(false, false);
+        }
+
+        private void DestroyGradientTexture()
+        {
+            if (runtimeGradientTexture == null)
+                return;
+
+            if (Application.isPlaying)
+                Destroy(runtimeGradientTexture);
+            else
+                DestroyImmediate(runtimeGradientTexture);
+
+            runtimeGradientTexture = null;
         }
 
         private void MarkMaterialPropertiesDirty()
