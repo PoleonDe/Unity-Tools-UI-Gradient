@@ -1,16 +1,9 @@
-Shader "Control/UI/Gradient"
+Shader "Control/UI/SoftMask"
 {
     Properties
     {
-        [PerRendererData] _MainTex ("Texture", 2D) = "white" {}
-        _GradientTex ("Gradient Texture", 2D) = "white" {}
+        [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         _Color ("Tint", Color) = (1, 1, 1, 1)
-        _ColorA ("Color A", Color) = (1, 1, 1, 1)
-        _ColorB ("Color B", Color) = (0, 0, 0, 1)
-        _GradientStart ("Gradient Start", Vector) = (0, 0.5, 0, 0)
-        _GradientEnd ("Gradient End", Vector) = (1, 0.5, 0, 0)
-        _GradientSquash ("Gradient Squash", Vector) = (0, 1.5, 0, 0)
-        _GradientType ("Gradient Type", Float) = 0
         [HideInInspector] _ControlSoftMaskTex ("Control Soft Mask", 2D) = "white" {}
         [HideInInspector] _ControlSoftMaskEnabled ("Control Soft Mask Enabled", Float) = 0
 
@@ -85,18 +78,11 @@ Shader "Control/UI/Gradient"
             };
 
             sampler2D _MainTex;
-            sampler2D _GradientTex;
             sampler2D _ControlSoftMaskTex;
             fixed4 _TextureSampleAdd;
             fixed4 _Color;
-            fixed4 _ColorA;
-            fixed4 _ColorB;
-            float4 _GradientStart;
-            float4 _GradientEnd;
-            float4 _GradientSquash;
             float4 _ClipRect;
             float4x4 _ControlSoftMaskCanvasToMask;
-            float _GradientType;
             float _ControlSoftMaskEnabled;
 
             v2f vert(appdata_t v)
@@ -112,75 +98,9 @@ Shader "Control/UI/Gradient"
                 return OUT;
             }
 
-            float Cross2(float2 a, float2 b)
-            {
-                return a.x * b.y - a.y * b.x;
-            }
-
-            float2 GetGradientCoordinates(float2 uv)
-            {
-                float2 anchorA = _GradientStart.xy;
-                float2 axisX = _GradientEnd.xy - anchorA;
-                float2 axisY = _GradientSquash.xy - anchorA;
-                float axisXLength = max(length(axisX), 0.000001);
-                float determinant = Cross2(axisX, axisY);
-
-                if (abs(determinant) <= 0.000001)
-                {
-                    axisY = float2(-axisX.y, axisX.x) / axisXLength;
-                    axisY *= axisXLength;
-                    determinant = Cross2(axisX, axisY);
-                }
-
-                float2 offset = uv - anchorA;
-                return float2(Cross2(offset, axisY) / determinant, Cross2(axisX, offset) / determinant);
-            }
-
-            float EvaluateLinear(float2 uv)
-            {
-                return GetGradientCoordinates(uv).x;
-            }
-
-            float EvaluateRadial(float2 uv)
-            {
-                return length(GetGradientCoordinates(uv));
-            }
-
-            float EvaluateAngular(float2 uv)
-            {
-                float2 coords = GetGradientCoordinates(uv);
-                if (dot(coords, coords) <= 0.000001)
-                    return 0.0;
-
-                return frac(atan2(coords.y, coords.x) / 6.28318530718);
-            }
-
-            float EvaluateDiamond(float2 uv)
-            {
-                float2 coords = GetGradientCoordinates(uv);
-                return abs(coords.x) + abs(coords.y);
-            }
-
-            float EvaluateGradient(float2 uv)
-            {
-                if (_GradientType < 0.5)
-                    return EvaluateLinear(uv);
-
-                if (_GradientType < 1.5)
-                    return EvaluateRadial(uv);
-
-                if (_GradientType < 2.5)
-                    return EvaluateAngular(uv);
-
-                return EvaluateDiamond(uv);
-            }
-
             fixed4 frag(v2f IN) : SV_Target
             {
-                float t = saturate(EvaluateGradient(IN.texcoord));
-                fixed4 gradientColor = tex2D(_GradientTex, float2(t, 0.5));
-                fixed4 textureColor = tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd;
-                fixed4 color = gradientColor * textureColor * IN.color;
+                fixed4 color = (tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd) * IN.color;
                 float2 softMaskTexcoord = IN.softMaskTexcoord;
                 float softMaskInside = step(0.0, softMaskTexcoord.x) * step(softMaskTexcoord.x, 1.0) * step(0.0, softMaskTexcoord.y) * step(softMaskTexcoord.y, 1.0);
                 float softMaskAlpha = tex2D(_ControlSoftMaskTex, softMaskTexcoord).a * softMaskInside;

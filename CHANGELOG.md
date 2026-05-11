@@ -2,6 +2,18 @@
 
 All notable changes to this package will be documented in this file.
 
+## [0.3.0] - 2026-05-11
+
+### Added
+- Added `Control/UI Soft Mask` and `Control/UI Soft Maskable` components for gradient alpha masking.
+- Added `Control/UI/SoftMask` shader support for default Unity UI graphics.
+- Added soft-mask sampling support to `Control/UI/Gradient` so gradients can be masked by other soft masks.
+- Added a `Show Mask Graphic` toggle to `Control/UI Soft Mask`.
+
+### Changed
+- Exposed runtime gradient alpha evaluation for generated soft-mask textures.
+- Soft mask texture resolution is now calculated automatically from the mask rect and canvas scale.
+
 ## [0.2.1] - 2026-05-11
 
 ### Changed

@@ -52,6 +52,8 @@ namespace Control
         [NonSerialized] private Material runtimeMaterial;
         [NonSerialized] private Texture2D runtimeGradientTexture;
         [NonSerialized] private bool materialPropertiesDirty = true;
+        [NonSerialized] private bool refreshRuntimeMaterialForMask;
+        [NonSerialized] private int version;
 
         public GradientType Type
         {
@@ -112,6 +114,34 @@ namespace Control
         }
 
         public override Texture mainTexture => s_WhiteTexture;
+
+        public int Version => version;
+
+        public override Color color
+        {
+            get => base.color;
+            set
+            {
+                if (base.color == value)
+                    return;
+
+                base.color = value;
+                MarkMaterialPropertiesDirty();
+            }
+        }
+
+        public override Material materialForRendering
+        {
+            get
+            {
+                EnsureRuntimeMaterial();
+                SyncMaterialProperties();
+
+                Material modifiedMaterial = base.materialForRendering;
+                ApplyMaterialProperties(modifiedMaterial);
+                return modifiedMaterial;
+            }
+        }
 
         [ContextMenu("Flip Start / End")]
         public void FlipStartAndEnd()
@@ -186,6 +216,12 @@ namespace Control
             );
         }
 
+        public float EvaluateAlphaAtNormalizedPoint(Vector2 normalizedPoint)
+        {
+            EnsureGradientExists();
+            return gradient.Evaluate(Mathf.Clamp01(EvaluateGradientTime(normalizedPoint))).a * color.a;
+        }
+
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -227,6 +263,13 @@ namespace Control
             EnsureRuntimeMaterial();
             SyncMaterialProperties();
             base.UpdateMaterial();
+        }
+
+        public override Material GetModifiedMaterial(Material baseMaterial)
+        {
+            Material modifiedMaterial = base.GetModifiedMaterial(baseMaterial);
+            ApplyMaterialProperties(modifiedMaterial);
+            return modifiedMaterial;
         }
 
         protected override void OnDidApplyAnimationProperties()
@@ -279,8 +322,8 @@ namespace Control
             if (runtimeGradientTexture == null)
                 runtimeGradientTexture = CreateGradientTexture();
 
-            if (runtimeMaterial != null && material != runtimeMaterial)
-                material = runtimeMaterial;
+            if (runtimeMaterial != null && m_Material != runtimeMaterial)
+                m_Material = runtimeMaterial;
         }
 
         private Material CreateRuntimeMaterial()
@@ -312,8 +355,8 @@ namespace Control
                 return;
             }
 
-            if (material == runtimeMaterial)
-                material = null;
+            if (m_Material == runtimeMaterial)
+                m_Material = null;
 
             if (Application.isPlaying)
                 Destroy(runtimeMaterial);
@@ -323,6 +366,7 @@ namespace Control
             runtimeMaterial = null;
             DestroyGradientTexture();
             materialPropertiesDirty = true;
+            refreshRuntimeMaterialForMask = false;
         }
 
         private void SyncMaterialProperties()
@@ -335,21 +379,64 @@ namespace Control
             if (runtimeMaterial == null)
                 return;
 
+            RefreshRuntimeMaterialForMaskIfNeeded();
             UpdateGradientTexture();
-
-            Color colorA = gradient.Evaluate(0f);
-            Color colorB = gradient.Evaluate(1f);
-
-            runtimeMaterial.SetTexture(GradientTextureId, runtimeGradientTexture);
-            runtimeMaterial.SetFloat(GradientTypeId, (float)type);
-            runtimeMaterial.SetVector(GradientStartId, start);
-            runtimeMaterial.SetVector(GradientEndId, end);
-            runtimeMaterial.SetVector(GradientSquashId, squash);
-            runtimeMaterial.SetColor(ColorAId, colorA);
-            runtimeMaterial.SetColor(ColorBId, colorB);
-            runtimeMaterial.SetColor(MaterialTintId, Color.white);
+            ApplyMaterialProperties(runtimeMaterial);
 
             materialPropertiesDirty = false;
+            refreshRuntimeMaterialForMask = false;
+        }
+
+        private void ApplyMaterialProperties(Material targetMaterial)
+        {
+            if (targetMaterial == null || gradient == null || runtimeGradientTexture == null)
+                return;
+
+            targetMaterial.SetTexture(GradientTextureId, runtimeGradientTexture);
+            targetMaterial.SetFloat(GradientTypeId, (float)type);
+            targetMaterial.SetVector(GradientStartId, start);
+            targetMaterial.SetVector(GradientEndId, end);
+            targetMaterial.SetVector(GradientSquashId, squash);
+            targetMaterial.SetColor(ColorAId, gradient.Evaluate(0f));
+            targetMaterial.SetColor(ColorBId, gradient.Evaluate(1f));
+            targetMaterial.SetColor(MaterialTintId, Color.white);
+        }
+
+        private void RefreshRuntimeMaterialForMaskIfNeeded()
+        {
+            if (!refreshRuntimeMaterialForMask || !ShouldRefreshRuntimeMaterialForMask())
+                return;
+
+            Material oldMaterial = runtimeMaterial;
+            Material newMaterial = CreateRuntimeMaterial();
+            if (newMaterial == null)
+                return;
+
+            runtimeMaterial = newMaterial;
+            if (m_Material == oldMaterial)
+                m_Material = runtimeMaterial;
+
+            DestroyMaterial(oldMaterial);
+        }
+
+        private bool ShouldRefreshRuntimeMaterialForMask()
+        {
+            if (isMaskingGraphic)
+                return true;
+
+            Mask mask = GetComponent<Mask>();
+            return mask != null && mask.MaskEnabled() && mask.graphic == this;
+        }
+
+        private static void DestroyMaterial(Material targetMaterial)
+        {
+            if (targetMaterial == null)
+                return;
+
+            if (Application.isPlaying)
+                Destroy(targetMaterial);
+            else
+                DestroyImmediate(targetMaterial);
         }
 
         private Texture2D CreateGradientTexture()
@@ -394,8 +481,70 @@ namespace Control
 
         private void MarkMaterialPropertiesDirty()
         {
+            version++;
             materialPropertiesDirty = true;
+            refreshRuntimeMaterialForMask = true;
             SetMaterialDirty();
+        }
+
+        private float EvaluateGradientTime(Vector2 normalizedPoint)
+        {
+            return type switch
+            {
+                GradientType.Radial => EvaluateRadial(normalizedPoint),
+                GradientType.Angular => EvaluateAngular(normalizedPoint),
+                GradientType.Diamond => EvaluateDiamond(normalizedPoint),
+                _ => EvaluateLinear(normalizedPoint)
+            };
+        }
+
+        private float EvaluateLinear(Vector2 normalizedPoint)
+        {
+            return GetGradientCoordinates(normalizedPoint).x;
+        }
+
+        private float EvaluateRadial(Vector2 normalizedPoint)
+        {
+            return GetGradientCoordinates(normalizedPoint).magnitude;
+        }
+
+        private float EvaluateAngular(Vector2 normalizedPoint)
+        {
+            Vector2 coordinates = GetGradientCoordinates(normalizedPoint);
+            if (coordinates.sqrMagnitude <= 0.000001f)
+                return 0f;
+
+            return Mathf.Repeat(Mathf.Atan2(coordinates.y, coordinates.x) / (Mathf.PI * 2f), 1f);
+        }
+
+        private float EvaluateDiamond(Vector2 normalizedPoint)
+        {
+            Vector2 coordinates = GetGradientCoordinates(normalizedPoint);
+            return Mathf.Abs(coordinates.x) + Mathf.Abs(coordinates.y);
+        }
+
+        private Vector2 GetGradientCoordinates(Vector2 normalizedPoint)
+        {
+            Vector2 anchorA = start;
+            Vector2 axisX = end - anchorA;
+            Vector2 axisY = squash - anchorA;
+            float axisXLength = Mathf.Max(axisX.magnitude, 0.000001f);
+            float determinant = Cross(axisX, axisY);
+
+            if (Mathf.Abs(determinant) <= 0.000001f)
+            {
+                axisY = new Vector2(-axisX.y, axisX.x) / axisXLength;
+                axisY *= axisXLength;
+                determinant = Cross(axisX, axisY);
+            }
+
+            Vector2 offset = normalizedPoint - anchorA;
+            return new Vector2(Cross(offset, axisY) / determinant, Cross(axisX, offset) / determinant);
+        }
+
+        private static float Cross(Vector2 a, Vector2 b)
+        {
+            return a.x * b.y - a.y * b.x;
         }
 
         private void SetAxis(Vector2 newStart, Vector2 newEnd)
